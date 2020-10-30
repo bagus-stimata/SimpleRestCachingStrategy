@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -23,6 +22,7 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.android.volley.AuthFailureError;
 import com.android.volley.Cache;
 import com.android.volley.NetworkResponse;
 import com.android.volley.ParseError;
@@ -60,7 +60,9 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -328,45 +330,25 @@ public class MainActivity extends AppCompatActivity {
 
         requestQueue = Volley.newRequestQueue(this);
 
-        requestVolleySingleData(AppConfig.BASE_URL + "getEmployeePath/3");
+        String urlSingle = AppConfig.BASE_URL + "getEmployeePath/3";
+//        requestVolleySingleData(urlSingle); //Ini Bisa
+        // Ini di persingkat
+        MyCachingStringRequest cachingStringRequest = new MyCachingStringRequest(com.android.volley.Request.Method.GET, urlSingle, new com.android.volley.Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                Gson gson = new GsonBuilder().create();
+                Employee result = gson.fromJson(response.toString(), Employee.class);
+                textView1.setText(result.getName() + " >> " + result.getDesignation());
+            }
+        }, new com.android.volley.Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError volleyerror) {
+                textView1.setText("");
+            }
+        });
+        cachingStringRequest.setTag(TAG);
+        requestQueue.add(cachingStringRequest);
 
-//        String urlObject = AppConfig.BASE_URL + "getEmployeePath/3";
-//        JsonObjectRequest jsObjRequest = new JsonObjectRequest(com.android.volley.Request.Method.GET, urlObject, null, new com.android.volley.Response.Listener<JSONObject>() {
-//            @Override
-//            public void onResponse(JSONObject response) {
-//                Gson gson=new GsonBuilder().create();
-//                Employee result = gson.fromJson(response.toString() , Employee.class);
-//                textView1.setText(result.getName() + " >> " + result.getDesignation());
-//            }
-//        }, new com.android.volley.Response.ErrorListener() {
-//            @Override
-//            public void onErrorResponse(VolleyError error) {
-//                textView1.setText("");
-//            }
-//        });
-
-//        StringRequest stringRequest = new StringRequest(com.android.volley.Request.Method.GET, url, new com.android.volley.Response.Listener<String>() {
-//            @Override
-//            public void onResponse(String response) {
-//                Toast.makeText(getApplicationContext(), response, Toast.LENGTH_LONG).show();
-//                textView1.setText(response.toString());
-//            }
-//        }, new com.android.volley.Response.ErrorListener() {
-//            @Override
-//            public void onErrorResponse(VolleyError volleyerror) {
-//                Toast.makeText(getApplicationContext(), volleyerror.getMessage(), Toast.LENGTH_LONG).show();
-//            }
-//        }) {
-//            @Override
-//            public Map<String, String> getHeaders() throws AuthFailureError {
-//                Map<String, String> headers =  new HashMap<String, String>();
-////                String credentials = AppConfig.BASIC_AUTH_USERNAME + ":" + AppConfig.BASIC_AUTH_PASSWORD;
-////                String encoded = "Basic "+ Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
-//                headers.put("Authorization", authHeader);
-//                return headers;
-//            }
-//        };
-//        requestQueue.add(jsObjRequest);
 
         /**
          * Get List
@@ -717,7 +699,9 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-
+    /**
+     * Voley
+     */
     private void requestVolleySingleData(String url) {
         /**
          * SOURCE
@@ -739,6 +723,21 @@ public class MainActivity extends AppCompatActivity {
                 textView1.setText("");
             }
         }) {
+            /**
+             * INi otentikasi Basic
+             */
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                Map<String, String> headers =  new HashMap<>();
+//                String credentials = AppConfig.BASIC_AUTH_USERNAME + ":" + AppConfig.BASIC_AUTH_PASSWORD;
+//                String encoded = "Basic "+ Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
+                headers.put("Authorization", authHeader);
+                return headers;
+            }
+
+            /**
+             * Ini baru caching method
+             */
             @Override
             protected com.android.volley.Response<JSONObject> parseNetworkResponse(NetworkResponse response) {
                 try {
@@ -768,7 +767,8 @@ public class MainActivity extends AppCompatActivity {
                     final String jsonString_AsResult = new String(response.data,
                             HttpHeaderParser.parseCharset(response.headers));
 
-                    return com.android.volley.Response.success(new JSONObject(jsonString_AsResult),   CacheManager.getCacheEntry(response));
+//                    return com.android.volley.Response.success(new JSONObject(jsonString_AsResult),    cacheEntry.responseHeaders);
+                    return com.android.volley.Response.success(new JSONObject(jsonString_AsResult),   CacheManager.parseCacheHeaderEntry(response));
                 } catch (UnsupportedEncodingException | JSONException e) {
                     return com.android.volley.Response.error(new ParseError(e));
                 }
@@ -821,7 +821,7 @@ public class MainActivity extends AppCompatActivity {
                     InputStream is = new ByteArrayInputStream(response.data);
                     Bitmap bitmap = BitmapFactory.decodeStream(is);
 
-                    return com.android.volley.Response.success(bitmap, CacheManager.getCacheEntry(response));
+                    return com.android.volley.Response.success(bitmap, CacheManager.parseCacheHeaderEntry(response));
                 }catch (Exception ex){
                     return com.android.volley.Response.error(new ParseError(ex));
 
@@ -851,15 +851,13 @@ public class MainActivity extends AppCompatActivity {
 
 
 class CacheManager{
-    public static Cache.Entry getCacheEntry(NetworkResponse response) {
+    public static Cache.Entry parseCacheHeaderEntry(NetworkResponse response) {
         Cache.Entry cacheEntry = HttpHeaderParser.parseCacheHeaders(response);
         if (cacheEntry == null) {
             cacheEntry = new Cache.Entry();
         }
-//        final long cacheHitButRefreshed = 3 * 60 * 1000; // in 3 minutes cache will be hit, but also refreshed on background
-        final long cacheHitButRefreshed = 15 * 1000; // di sesuaikan dengan sample retrofit yaitu 15 detik. satuan mili second ya, beda dengan retrofit
-//        final long cacheExpired = 24 * 60 * 60 * 1000; // in 24 hours this cache entry expires completely
-        final long cacheExpired = 24 * 60 * 60 * 30 * 1000; // 30 hari disesuikan dengan retrofit
+        final long cacheHitButRefreshed = 3 * 60 * 1000; // in 3 minutes cache will be hit, but also refreshed on background
+        final long cacheExpired = 24 * 60 * 60 * 1000; // in 24 hours this cache entry expires completely
         long now = System.currentTimeMillis();
         final long softExpire = now + cacheHitButRefreshed;
         final long ttl = now + cacheExpired;
@@ -878,6 +876,54 @@ class CacheManager{
         cacheEntry.responseHeaders = response.headers;
 
         return cacheEntry;
+    }
+}
+
+class MyCachingStringRequest extends StringRequest {
+    public MyCachingStringRequest(int method, String url, com.android.volley.Response.Listener<String> listener, com.android.volley.Response.ErrorListener errorListener) {
+        super(method, url, listener, errorListener);
+    }
+
+    public MyCachingStringRequest(String url, com.android.volley.Response.Listener<String> listener, com.android.volley.Response.ErrorListener errorListener) {
+        super(url, listener, errorListener);
+    }
+
+    @Override
+    protected com.android.volley.Response<String> parseNetworkResponse(NetworkResponse response) {
+        String parsed;
+        try {
+            parsed = new String(response.data, HttpHeaderParser.parseCharset(response.headers));
+        } catch (UnsupportedEncodingException e) {
+            parsed = new String(response.data);
+        }
+//        return com.android.volley.Response.success(parsed, parseIgnoreCacheHeaders(response));
+        return com.android.volley.Response.success(parsed, CacheManager.parseCacheHeaderEntry(response));
+    }
+    @Override
+    protected void deliverResponse(String response) {
+        super.deliverResponse(response);
+    }
+
+    @Override
+    public void deliverError(VolleyError error) {
+        super.deliverError(error);
+    }
+
+    @Override
+    protected VolleyError parseNetworkError(VolleyError volleyError) {
+        return super.parseNetworkError(volleyError);
+    }
+
+    /**
+     * INi otentikasi Basic
+     */
+    @Override
+    public Map<String, String> getHeaders() throws AuthFailureError {
+        Map<String, String> headers =  new HashMap<>();
+        String credentials = AppConfig.BASIC_AUTH_USERNAME + ":" + AppConfig.BASIC_AUTH_PASSWORD;
+        String authHeader = "Basic "+ Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
+        headers.put("Authorization", authHeader);
+        return headers;
     }
 
 }
