@@ -20,8 +20,10 @@ public class ApiSpringRestClient {
     private String username = AppConfig.BASIC_AUTH_USERNAME;
     private String password = AppConfig.BASIC_AUTH_PASSWORD;
 
+    /**
+     * INSTANCE INI SEMENTARA TIDAK DIPAKAI DAHULU
+     */
     private static ApiSpringRestClient ourInstance;
-
     public static synchronized ApiSpringRestClient getInstance() {
         if (ourInstance==null) {
             ourInstance = new ApiSpringRestClient();

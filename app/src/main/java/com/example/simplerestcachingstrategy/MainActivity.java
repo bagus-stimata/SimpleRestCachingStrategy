@@ -316,7 +316,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private RequestQueue requestQueue;
+
 
     public void simpleRestClient_WithVolley() {
         /**
@@ -327,8 +327,7 @@ public class MainActivity extends AppCompatActivity {
          * Deklarasi Quey For All
          */
 
-
-        requestQueue = Volley.newRequestQueue(this);
+        RequestQueue requestQueue = Volley.newRequestQueue(this);
 
         String urlSingle = AppConfig.BASE_URL + "getEmployeePath/3";
 //        requestVolleySingleData(urlSingle); //Ini Bisa
